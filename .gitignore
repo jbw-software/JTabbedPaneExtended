@@ -1,14 +1,8 @@
-# Compiled class file
-*.class
+# Java
+.class
 
 # Log file
 *.log
-
-# BlueJ files
-*.ctxt
-
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
 
 # Package Files #
 *.jar
@@ -21,3 +15,62 @@
 
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
+
+# Maven
+log/
+target/
+bin/
+build/
+dist/
+generated/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+# Avoid ignoring Maven wrapper jar file (.jar files are usually ignored)
+!/.mvn/wrapper/maven-wrapper.jar
+
+# Gradle
+.gradle
+/captures
+# Avoid ignoring Gradle wrapper jar file (.jar files are usually ignored)
+!gradle-wrapper.jar
+
+# Eclipse
+.classpath
+.project
+.settings/
+ 
+# Intellij
+.idea/
+/.idea/workspace.xml
+/.idea/libraries
+.iml
+.iws
+
+# Android
+/local.properties
+.externalNativeBuild
+
+# Netbeans
+nbproject/*
+!nbproject/project.properties
+!nbproject/project.xml
+nbbuild/
+nbdist/
+.nb-gradle/
+
+# Mac
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# General
+.swp
+.orig
+.lock
+
