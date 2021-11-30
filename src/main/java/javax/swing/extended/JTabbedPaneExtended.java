@@ -1,18 +1,68 @@
 package javax.swing.extended;
 
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import javax.swing.plaf.metal.extended.MetalTabbedPaneUIDecorator;
 import javax.swing.JTabbedPane;
+import javax.swing.UIManager;
+import javax.swing.plaf.InsetsUIResource;
 import javax.swing.plaf.TabbedPaneUI;
 
 @SuppressWarnings("serial")
 public class JTabbedPaneExtended extends JTabbedPane {
 
     private MetalTabbedPaneUIDecorator metalTabbedPaneUIDecorator;
+    private PropertyChangeListener tabLayoutPolicyListener;
     private volatile boolean skipInvalidate = false;
+
+    public JTabbedPaneExtended() {
+        // Narrow the right gap added around tab component of L&F;
+        // MetalLookAndFeel default insets are: (0, 9, 1, 9).
+        UIManager.put("TabbedPane.tabInsets", new InsetsUIResource(0, 9, 1, 1));
+
+        // Increase the gap between label and icon or button in SCROLL_TAB_LAYOUT
+        UIManager.put("TabbedPane.textIconGap", 4);
+    }
+
+    private void installListeners() {
+        if ((tabLayoutPolicyListener = this::tabLayoutPolicyChange) != null) {
+            addPropertyChangeListener("tabLayoutPolicy", this::tabLayoutPolicyChange);
+        }
+    }
+
+    private void uninstallListeners() {
+        if (tabLayoutPolicyListener != null) {
+            removePropertyChangeListener(tabLayoutPolicyListener);
+            tabLayoutPolicyListener = null;
+        }
+    }
+
+    private void tabLayoutPolicyChange(PropertyChangeEvent evt) {
+        if ("tabLayoutPolicy".equals(evt.getPropertyName())) {
+            if ((int) evt.getNewValue() == JTabbedPane.SCROLL_TAB_LAYOUT) {
+                // Ensure that selected index is within visible scroll area.
+                final int selectedIndex = this.getSelectedIndex();
+                if (selectedIndex >= 0) {
+                    this.setSelectedIndex(selectedIndex);
+                }
+            }
+        }
+    }
+
+    @Override
+    public void addNotify() {
+        this.installListeners();
+        super.addNotify();
+    }
+
+    @Override
+    public void removeNotify() {
+        super.removeNotify();
+        this.uninstallListeners();
+    }
 
     @Override
     public void setUI(TabbedPaneUI ui) {
-        System.out.println("setUI: " + ui);
         if ("javax.swing.plaf.metal.MetalTabbedPaneUI".equals(ui.getClass().getName())) {
             if (this.metalTabbedPaneUIDecorator == null) {
                 this.metalTabbedPaneUIDecorator = new MetalTabbedPaneUIDecorator();
@@ -51,6 +101,8 @@ public class JTabbedPaneExtended extends JTabbedPane {
         }
     }
 
+// ToDo: There are lots of additional calls to invallidate because of the change of layouts in "runWithOriginalLayoutManager".
+//       It should be possible to filter out uncecessary calls.
 //    @Override
 //    public void invalidate() {
 //        if (!this.skipInvalidate) {
@@ -60,10 +112,21 @@ public class JTabbedPaneExtended extends JTabbedPane {
 //            this.skipInvalidate = false;
 //        }
 //    }
-
     public void setSkipNextInvalidate(boolean skipNextInvalidate) {
         if (this.skipInvalidate != skipNextInvalidate) {
             this.skipInvalidate = skipNextInvalidate;
+        }
+    }
+
+    /**
+     * Toggles the tab layout policy between {@code JTabbedPane.WRAP_TAB_LAYOUT}
+     * and {@code JTabbedPane.SCROLL_TAB_LAYOUT}.
+     */
+    public void toggleTabLayoutPolicy() {
+        if (this.getTabLayoutPolicy() == JTabbedPane.SCROLL_TAB_LAYOUT) {
+            this.setTabLayoutPolicy(JTabbedPane.WRAP_TAB_LAYOUT);
+        } else {
+            this.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         }
     }
 }

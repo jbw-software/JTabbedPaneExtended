@@ -3,6 +3,7 @@ package de.joergwille.playground.jtabbedpaneextended;
 import java.awt.Dimension;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import javax.swing.Action;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -14,7 +15,9 @@ import javax.swing.JTabbedPane;
 import javax.swing.KeyStroke;
 import javax.swing.UIManager;
 import javax.swing.UnsupportedLookAndFeelException;
+import javax.swing.extended.ClosableTabComponent;
 import javax.swing.extended.JTabbedPaneExtended;
+import javax.swing.extended.RemoveTabAction;
 import javax.swing.plaf.metal.MetalLookAndFeel;
 
 @SuppressWarnings("serial")
@@ -34,7 +37,7 @@ public class Main extends JFrame {
             this.testTabbedPane = new JTabbedPaneExtended();
         } else {
             this.testTabbedPane = new JTabbedPane();
-        }    
+        }
         this.testTabbedPane.setName("TestTabbedName");
         JMenuBar menuBar = new JMenuBar();
         tabComponentsItem = new JCheckBoxMenuItem("Use TabComponents", true);
@@ -73,9 +76,16 @@ public class Main extends JFrame {
 
     private void runTest() {
         testTabbedPane.removeAll();
+        final Action deleteAction = new RemoveTabAction();
         for (int i = 0; i < NUM_TABS; i++) {
-            String title = "Test " + i;
-            testTabbedPane.add(title, createPanel(title));
+            final String title = "Test " + i;
+            final JPanel panel = createPanel(title);
+//            if (USE_EXTENDED_TABBED_PANE) {
+//                ((JTabbedPaneExtended) testTabbedPane).add(title, panel, deleteAction);
+//            } else {
+            testTabbedPane.add(title, panel);
+            testTabbedPane.setTabComponentAt(i, new ClosableTabComponent(testTabbedPane, deleteAction));
+//            }
         }
         tabComponentsItem.setSelected(true);
         testTabbedPane.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);

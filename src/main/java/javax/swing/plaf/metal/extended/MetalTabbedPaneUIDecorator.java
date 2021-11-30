@@ -38,6 +38,7 @@ import static javax.swing.SwingConstants.TOP;
 import javax.swing.UIManager;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import javax.swing.extended.ClosableTabComponent;
 import javax.swing.extended.JTabbedPaneExtended;
 import javax.swing.plaf.ColorUIResource;
 import javax.swing.plaf.UIResource;
@@ -47,6 +48,7 @@ import javax.swing.plaf.metal.MetalTabbedPaneUI;
 public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
 
     private JViewport tabViewport;
+    private JPanel tabContainer;
     private JButton tabListButton;
     private JButton scrollForwardButton;
     private JButton scrollBackwardButton;
@@ -166,17 +168,29 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
         super.installComponents();
 
         tabViewport = null;
-        if (isScrollTabLayout()) {
+        tabContainer = null;
+
+        for (Component c : tabPane.getComponents()) {
             // find scrollable tab viewport
-            for (Component c : tabPane.getComponents()) {
-                if (c instanceof JViewport && (c.getClass().getName().equals("javax.swing.plaf.basic.BasicTabbedPaneUI$ScrollableTabViewport") || c.getClass().getName().equals("BasicTabbedPaneUI$ScrollableTabViewport"))) {
+            if (isScrollTabLayout()) {
+                if (c instanceof JViewport && (c.getClass().getName().equals("javax.swing.plaf.basic.BasicTabbedPaneUI$ScrollableTabViewport"))) {
                     tabViewport = (JViewport) c;
+                    break;
+                }
+            } else {
+                // find tabContainer    
+                if (c instanceof JPanel && (c.getClass().getName().equals("javax.swing.plaf.basic.BasicTabbedPaneUI$TabContainer"))) {
+                    tabContainer = (JPanel) c;
                     break;
                 }
             }
         }
 
-        installHiddenTabsNavigation();
+        if (isScrollTabLayout()) {
+            installHiddenTabsNavigation();
+        } else {
+            installRightAllignedTabComponents();
+        }
     }
 
     @Override
@@ -309,57 +323,6 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
         basicTabbedPaneUIPaint(g, c);
     }
 
-//    /**
-//     * Returns a point which is translated from the specified point in the
-//     * JTabbedPane's coordinate space to the coordinate space of the
-//     * ScrollableTabPanel.  This is used for SCROLL_TAB_LAYOUT ONLY.
-//     */
-//    private Point translatePointToTabPanel(final int srcx, final int srcy, final Point dest) {
-//        final Point vpp = tabViewport.getLocation();
-//        final Point viewp = tabViewport.getViewPosition();
-//        dest.x = srcx - vpp.x + viewp.x;
-//        dest.y = srcy - vpp.y + viewp.y;
-//        return dest;
-//    }
-//    /**
-//     * Returns the tab index which intersects the specified point
-//     * in the JTabbedPane's coordinate space.
-//     * @param pane
-//     * @param x
-//     * @param y
-//     * @return 
-//     */
-//    @Override
-//    public int tabForCoordinate(final JTabbedPane pane, final int x, final int y) {
-//        return tabForCoordinate(pane, x, y, true);
-//    }
-//    private int tabForCoordinate(final JTabbedPane pane, final int x, final int y,
-//            final boolean validateIfNecessary) {
-//        if (validateIfNecessary) {
-//            ensureCurrentLayout();
-//        }
-////        if (isRunsDirty) {
-////            // We didn't recalculate the layout, runs and tabCount may not
-////            // line up, bail.
-////            return -1;
-////        }
-//        final Point point = new Point(x, y);
-//
-//        if (isScrollTabLayout()) {
-//            translatePointToTabPanel(x, y, point);
-//            final Rectangle viewRect = tabViewport.getViewRect();
-//            if (!viewRect.contains(point)) {
-//                return -1;
-//            }
-//        }
-//        final int tabCount = tabPane.getTabCount();
-//        for (int idx = 0; idx < tabCount; idx++) {
-//            if (rects[idx].contains(point.x, point.y)) {
-//                return idx;
-//            }
-//        }
-//        return -1;
-//    }
     protected void basicTabbedPaneUIPaint(Graphics graphics, JComponent c) {
         int selectedIndex = tabPane.getSelectedIndex();
         int tabPlacement = tabPane.getTabPlacement();
@@ -430,6 +393,13 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
         }
     }
 
+    protected void installRightAllignedTabComponents() {
+        if (isScrollTabLayout() || tabContainer == null) {
+            return;
+        }
+        tabPane.setLayout(createWrapLayoutManager());
+    }
+
     private JTabbedPaneExtended getExtendedTabbedPane() {
         if (super.tabPane instanceof JTabbedPaneExtended) {
             return (JTabbedPaneExtended) super.tabPane;
@@ -463,6 +433,10 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
 
     private LayoutManager createScrollLayoutManager(BasicTabbedPaneUI.TabbedPaneLayout delegate) {
         return new TabbedPaneScrollLayoutDecorator(delegate);
+    }
+
+    private LayoutManager createWrapLayoutManager() {
+        return new TabbedPaneWrapLayout();
     }
 
     private void stateChanged(ChangeEvent e) {
@@ -516,6 +490,40 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
 
     }
 
+    private class TabbedPaneWrapLayout extends TabbedPaneLayout {
+
+        @Override
+        public void layoutContainer(Container parent) {
+            super.layoutContainer(parent);
+            if (!isScrollTabLayout()) {
+                layoutTabComponents();
+            }
+        }
+
+        private void layoutTabComponents() {
+            if (tabContainer == null) {
+                return;
+            }
+            Rectangle rect = new Rectangle();
+            Point delta = new Point(-tabContainer.getX(), -tabContainer.getY());
+            for (int i = 0; i < tabPane.getTabCount(); i++) {
+                Component c = tabPane.getTabComponentAt(i);
+                if (c == null || !(c instanceof ClosableTabComponent)) {
+                    continue;
+                }
+
+                getTabBounds(i, rect);
+                Insets insets = getTabInsets(tabPane.getTabPlacement(), i);
+                int outerX = rect.x + insets.left + delta.x;
+                int outerWidth = rect.width - insets.left - insets.right;
+                rect = c.getBounds();
+
+                // Overwrite X and widht value from the original layout.
+                c.setBounds(outerX, rect.y, outerWidth, rect.height);
+            }
+        }
+    }
+
     private final class TabbedPaneScrollLayoutDecorator extends TabbedPaneLayout implements LayoutManager {
 
         private final BasicTabbedPaneUI.TabbedPaneLayout delegate;
@@ -527,19 +535,16 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
 
         @Override
         public Dimension preferredLayoutSize(Container parent) {
-            System.out.println("delegate.preferredLayoutSize(parent) = " + delegate.preferredLayoutSize(parent));
             return delegate.preferredLayoutSize(parent);
         }
 
         @Override
         public Dimension minimumLayoutSize(Container parent) {
-            System.out.println("delegate.preferredLayoutSize(parent) = " + delegate.preferredLayoutSize(parent));
             return delegate.minimumLayoutSize(parent);
         }
 
         @Override
         public void addLayoutComponent(String name, Component comp) {
-            System.out.println("addLayoutComponent = " + name);
             delegate.addLayoutComponent(name, comp);
         }
 
@@ -550,18 +555,16 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
 
         @Override
         public void layoutContainer(Container parent) {
-//            System.out.println("! In mytabbedpanetest.AveMetalTabbedPaneUI.AveTabbedPaneScrollLayout.layoutContainer()");
-
             // Original layout manager calculates layout for 2 ScrollableTabButtons.
             // To add space for a 3'rd button, we temporarly increase the width of the buttons
             // find backward/forward scroll buttons
             final Dimension buttonSize = scrollForwardButton.getPreferredSize();
             final int originalWidth = buttonSize.width;
-            buttonSize.width = 3 * buttonSize.width / 2;
+            final int gap = 2; // gab between ForwardBackwardButtons and TabListButton
+            buttonSize.width = (3 * buttonSize.width + gap) / 2;
             scrollForwardButton.setPreferredSize(buttonSize);
 
             // delegate to original layout manager and let it layout tabs and buttons
-            //
             // runWithOriginalLayoutManager() is necessary for correct locations
             // of tab components layed out in TabbedPaneLayout.layoutTabComponents()
             runWithOriginalLayoutManager(() -> {
@@ -572,14 +575,13 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
             Rectangle bounds = scrollForwardButton.getBounds();
             bounds.x += (bounds.width - originalWidth);
             bounds.width = originalWidth;
-            scrollForwardButton.setBounds(bounds);
-
-            bounds = scrollBackwardButton.getBounds();
             tabListButton.setBounds(bounds);
-            bounds.x -= scrollBackwardButton.getPreferredSize().width;
+
+            bounds.x -= (bounds.width + gap);        
+            scrollForwardButton.setBounds(bounds);
+            bounds.x -= bounds.width;        
             scrollBackwardButton.setBounds(bounds);
         }
-
     }
 
     /**
@@ -658,9 +660,6 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
             this.tabListPopup.show(this, 0, this.getHeight());
 
             // Scroll such that selected index is visible.
-            if (selectedIndex > 5) {
-                System.err.println("selectedIndex: " + selectedIndex);
-            }
             tabList.ensureIndexIsVisible(selectedIndex);
         }
 
