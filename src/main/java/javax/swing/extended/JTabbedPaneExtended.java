@@ -100,18 +100,18 @@ public class JTabbedPaneExtended extends JTabbedPane {
             this.doLayout();
         }
     }
+    
+    /**
+     * There are lots of additional calls to invallidate because of the change of layouts in {@code MetalTabbedPaneUIDecorator}'s runWithOriginalLayoutManager method.
+     * To avoid uncecessary validation of TabbedPane's children these calls are skiped.
+     */
+    @Override
+    public void invalidate() {
+        if (!this.skipInvalidate) {
+            super.invalidate();
+        }
+    }
 
-// ToDo: There are lots of additional calls to invallidate because of the change of layouts in "runWithOriginalLayoutManager".
-//       It should be possible to filter out uncecessary calls.
-//    @Override
-//    public void invalidate() {
-//        if (!this.skipInvalidate) {
-//            System.err.println("JTabbedPaneExtended invalidate");
-//            super.invalidate();
-//        } else {
-//            this.skipInvalidate = false;
-//        }
-//    }
     public void setSkipNextInvalidate(boolean skipNextInvalidate) {
         if (this.skipInvalidate != skipNextInvalidate) {
             this.skipInvalidate = skipNextInvalidate;

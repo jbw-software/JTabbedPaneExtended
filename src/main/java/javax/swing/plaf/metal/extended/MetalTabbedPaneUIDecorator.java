@@ -408,10 +408,6 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
     }
 
     private void runWithOriginalLayoutManager(Runnable runnable) {
-        this.runWithOriginalLayoutManager(runnable, false);
-    }
-
-    private void runWithOriginalLayoutManager(Runnable runnable, boolean skipInvalidate) {
         LayoutManager layout = tabPane.getLayout();
         if (layout instanceof TabbedPaneScrollLayoutDecorator) {
             // temporary change layout manager because the runnable may use
@@ -419,9 +415,11 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
             final JTabbedPaneExtended extendedPaneExtended = getExtendedTabbedPane();
             extendedPaneExtended.setSkipNextInvalidate(true);
             tabPane.setLayout(((TabbedPaneScrollLayoutDecorator) layout).delegate);
+            extendedPaneExtended.setSkipNextInvalidate(false);
             runnable.run();
-//            extendedPaneExtended.setSkipNextInvalidate(skipInvalidate);
+            extendedPaneExtended.setSkipNextInvalidate(true);
             tabPane.setLayout(layout);
+            extendedPaneExtended.setSkipNextInvalidate(false);
         } else {
             runnable.run();
         }
@@ -442,7 +440,7 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
     private void stateChanged(ChangeEvent e) {
         runWithOriginalLayoutManager(() -> {
             this.originalStateChangeListener.stateChanged(e);
-        }, true);
+        });
     }
 
     private void ensureCurrentLayout() {
@@ -470,7 +468,7 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
         public void mousePressed(MouseEvent e) {
             runWithOriginalLayoutManager(() -> {
                 originalMouseListener.mousePressed(e);
-            }, true);
+            });
         }
 
         @Override
@@ -569,7 +567,7 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
             // of tab components layed out in TabbedPaneLayout.layoutTabComponents()
             runWithOriginalLayoutManager(() -> {
                 delegate.layoutContainer(parent);
-            }, true);
+            });
 
             scrollForwardButton.setPreferredSize(null);
             Rectangle bounds = scrollForwardButton.getBounds();
@@ -718,7 +716,7 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
         protected void fireActionPerformed(ActionEvent event) {
             runWithOriginalLayoutManager(() -> {
                 super.fireActionPerformed(event);
-            }, true);
+            });
         }
     }
 
