@@ -258,22 +258,33 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
         }
 
         if (direction == WEST || direction == NORTH) {
-            scrollBackwardButton = new ScrollableTabButton(direction);
+            scrollBackwardButton = new ScrollableTabButton(direction) {
+                @Override
+                protected void fireActionPerformed(ActionEvent event) {
+                    runWithOriginalLayoutManager(() -> {
+                        superFireActionPerformed(event);
+                    });
+                }
+            };
             return scrollBackwardButton;
         } else { // direction == EAST || direction == SOUTH) {
-            scrollForwardButton = new ScrollableTabButton(direction);
+            scrollForwardButton = new ScrollableTabButton(direction) {
+                @Override
+                protected void fireActionPerformed(ActionEvent event) {
+                    runWithOriginalLayoutManager(() -> {
+                        superFireActionPerformed(event);
+                    });
+                }
+            };
             return scrollForwardButton;
         }
     }
 
     @Override
-    protected void paintTab(Graphics g, int tabPlacement,
-            Rectangle[] rects, int tabIndex,
-            Rectangle iconRect, Rectangle textRect) {
+    protected void paintTab(Graphics g, int tabPlacement, Rectangle[] rects,
+            int tabIndex, Rectangle iconRect, Rectangle textRect) {
         runWithOriginalLayoutManager(() -> {
-            super.paintTab(g, tabPlacement,
-                    rects, tabIndex,
-                    iconRect, textRect);
+            super.paintTab(g, tabPlacement, rects, tabIndex, iconRect, textRect);
         });
     }
 
@@ -360,7 +371,7 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
         if (direction != SOUTH && direction != NORTH && direction != EAST && direction != WEST) {
             throw new IllegalArgumentException("Direction must be one of: SOUTH, NORTH, EAST or WEST");
         }
-        return new TabListButton(direction);
+        return new TabListButton(direction, this.tabPane);
     }
 
     protected void installHiddenTabsNavigation() {
@@ -441,6 +452,9 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
         runWithOriginalLayoutManager(() -> {
             this.originalStateChangeListener.stateChanged(e);
         });
+        if (this.tabListButton != null) {
+            this.tabListButton.setVisible(tabPane.getTabCount() > 0);
+        }
     }
 
     private void ensureCurrentLayout() {
@@ -561,6 +575,7 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
             final int gap = 2; // gab between ForwardBackwardButtons and TabListButton
             buttonSize.width = (3 * buttonSize.width + gap) / 2;
             scrollForwardButton.setPreferredSize(buttonSize);
+            tabListButton.setVisible(false);
 
             // delegate to original layout manager and let it layout tabs and buttons
             // runWithOriginalLayoutManager() is necessary for correct locations
@@ -574,10 +589,11 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
             bounds.x += (bounds.width - originalWidth);
             bounds.width = originalWidth;
             tabListButton.setBounds(bounds);
+            tabListButton.setVisible(scrollForwardButton.isVisible() || scrollBackwardButton.isVisible());
 
-            bounds.x -= (bounds.width + gap);        
+            bounds.x -= (bounds.width + gap);
             scrollForwardButton.setBounds(bounds);
-            bounds.x -= bounds.width;        
+            bounds.x -= bounds.width;
             scrollBackwardButton.setBounds(bounds);
         }
     }
@@ -586,35 +602,67 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
      * Extends a scrollable tab button to enable a tab list pop-up menu.
      */
     @SuppressWarnings("serial")
-    private final class TabListButton extends ScrollableTabButton {
+    private static final class TabListButton extends ScrollableTabButton {
 
         private static final int VISIBLE_ENTRIES = 30;
+        private final JPanel listPanel;
+        private final JTabbedPane tabPane;
         private final JPopupMenu tabListPopup;
-        private JPanel listPanel;
+        private final ListCellRenderer<String> tabListCellRenderer;
+        private final JScrollPane tabListScroll;
+        final MouseListener mouseListener;
 
-        public TabListButton(final int direction) {
+        public TabListButton(final int direction, final JTabbedPane tabPane) {
             super(direction);
+
+            this.tabPane = tabPane;
+
+            // Generate list panel.
+            this.listPanel = new JPanel();
+            this.listPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 0, 0));
+            this.listPanel.setBackground(UIManager.getColor("Panel.background"));
+            this.listPanel.setOpaque(true);
+
+            this.tabListCellRenderer = new TabListCellRenderer<>(this.tabPane, this.listPanel);
+
             this.tabListPopup = new JPopupMenu();
             this.tabListPopup.setLayout(new BorderLayout());
-            this.addActionListener((final ActionEvent evt) -> {
-                initAndShowPopup();
-            });
+
+            this.tabListScroll = new JScrollPane();
+            this.tabListScroll.setBorder(BorderFactory.createEmptyBorder());
+            this.tabListScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+
+            this.mouseListener = new MouseAdapter() {
+                @Override
+                public void mouseClicked(final MouseEvent evt) {
+                    final JList theList = (JList) evt.getSource();
+                    if (evt.getClickCount() == 1) {
+                        final int index = theList.locationToIndex(evt.getPoint());
+                        if (index >= 0 && index < tabPane.getTabCount()) {
+                            tabPane.setSelectedIndex(index);
+                        }
+                        tabListPopup.setVisible(false);
+                        theList.removeMouseListener(this);
+                    }
+                }
+            };
+        }
+
+        @Override
+        protected void fireActionPerformed(ActionEvent event) {
+            initAndShowPopup();
         }
 
         private void initAndShowPopup() {
             // Clean up.
             this.tabListPopup.removeAll();
-
-            // Generate list panel.
-            this.listPanel = new JPanel();
-            this.listPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 0, 0));
-//            this.listPanel.setBackground(UIManager.getColor("Panel.background"));
-            this.listPanel.setOpaque(true);
+            this.listPanel.removeAll();
+            this.tabListScroll.setViewportView(null);
 
             final DefaultListModel<String> tabListModel = new DefaultListModel<>();
             String prototype = "";
-            for (int idx = 0; idx < tabPane.getTabCount(); idx++) {
-                final String title = tabPane.getTitleAt(idx);
+            for (int idx = 0; idx < this.tabPane.getTabCount(); idx++) {
+                final String title = this.tabPane.getTitleAt(idx);
                 tabListModel.addElement(title);
                 if (title.length() > prototype.length()) {
                     prototype = title;
@@ -623,54 +671,38 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
             // Create list with custom layout.
             final JList<String> tabList = new JList<>(tabListModel);
             tabList.setPrototypeCellValue(prototype);
-            tabList.setVisibleRowCount(Math.min(VISIBLE_ENTRIES, tabPane.getTabCount()));
+            tabList.setVisibleRowCount(Math.min(VISIBLE_ENTRIES, this.tabPane.getTabCount()));
+            tabList.addMouseListener(this.mouseListener);
             // Set cell renderer.
-            tabList.setCellRenderer(new AveTabListCellRenderer<>());
+            tabList.setCellRenderer(tabListCellRenderer);
             // Set selected index.
-            final int selectedIndex = tabPane.getSelectedIndex();
+            final int selectedIndex = this.tabPane.getSelectedIndex();
             tabList.setSelectedIndex(selectedIndex);
             tabList.setFixedCellHeight(18);
-            // Put list into a scroll panel.
-            final JScrollPane tabListScroll = new JScrollPane(tabList);
-            tabListScroll.setBorder(BorderFactory.createEmptyBorder());
-            tabListScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-
-            this.listPanel.add(tabListScroll); //,gbc);
-
-            final MouseListener mouseListener = new MouseAdapter() {
-
-                @Override
-                public void mouseClicked(final MouseEvent evt) {
-                    final JList theList = (JList) evt.getSource();
-                    if (evt.getClickCount() == 1) {
-                        final int index = theList.locationToIndex(evt.getPoint());
-                        if (index >= 0) {
-                            tabPane.setSelectedIndex(index);
-                        }
-                        // TabListPopup.this.menuSelectionChanged(false);
-                        tabListPopup.setVisible(false);
-                    }
-                }
-            };
-            tabList.addMouseListener(mouseListener);
-
-            this.tabListPopup.add(this.listPanel, BorderLayout.CENTER);
-            this.tabListPopup.show(this, 0, this.getHeight());
-
             // Scroll such that selected index is visible.
             tabList.ensureIndexIsVisible(selectedIndex);
+            // Put list into a scroll panel.
+            this.tabListScroll.setViewportView(tabList);
+            this.listPanel.add(this.tabListScroll);
+            this.tabListPopup.add(this.listPanel, BorderLayout.CENTER);
+            this.tabListPopup.show(this, 0, this.getHeight());
         }
 
         /**
          * Provides a listCellRenderer for the tab list.
          */
-        private final class AveTabListCellRenderer<E> extends JLabel implements ListCellRenderer<E> {
+        private static final class TabListCellRenderer<E> extends JLabel implements ListCellRenderer<E> {
+
+            private final JTabbedPane tabPane;
+            private final JPanel listPanel;
 
             /**
              * Creates a new instance of {@code AveTabListCellRenderer}.
              */
-            private AveTabListCellRenderer() {
+            private TabListCellRenderer(final JTabbedPane tabPane, final JPanel listPanel) {
                 super();
+                this.tabPane = tabPane;
+                this.listPanel = listPanel;
                 // JLabel needs to be opaque to enable background setting.
                 this.setOpaque(true);
             }
@@ -686,12 +718,12 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
                 // Add some horizontal space around text
                 this.setText("  " + value.toString() + "  ");
                 // Use tab foreground color
-                this.setForeground(tabPane.getForegroundAt(index));
+                this.setForeground(this.tabPane.getForegroundAt(index));
                 // If tab background color has been explicitly set (not instance of ColorUIResource), use it
-                if (tabPane.getBackgroundAt(index) instanceof ColorUIResource) {
-                    this.setBackground(listPanel.getBackground());
+                if (this.tabPane.getBackgroundAt(index) instanceof ColorUIResource) {
+                    this.setBackground(this.listPanel.getBackground());
                 } else {
-                    this.setBackground(tabPane.getBackgroundAt(index));
+                    this.setBackground(this.tabPane.getBackgroundAt(index));
                 }
                 final Font font = this.getFont();
                 this.setFont(isSelected ? font.deriveFont(Font.BOLD) : font.deriveFont(Font.PLAIN));
@@ -701,7 +733,7 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
     }
 
     @SuppressWarnings("serial")
-    private class ScrollableTabButton extends BasicArrowButton implements UIResource,
+    private static abstract class ScrollableTabButton extends BasicArrowButton implements UIResource,
             SwingConstants {
 
         private ScrollableTabButton(final int direction) {
@@ -713,10 +745,10 @@ public class MetalTabbedPaneUIDecorator extends MetalTabbedPaneUI {
         }
 
         @Override
-        protected void fireActionPerformed(ActionEvent event) {
-            runWithOriginalLayoutManager(() -> {
-                super.fireActionPerformed(event);
-            });
+        abstract protected void fireActionPerformed(ActionEvent event);
+
+        protected void superFireActionPerformed(ActionEvent event) {
+            super.fireActionPerformed(event);
         }
     }
 

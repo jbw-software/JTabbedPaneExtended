@@ -80,12 +80,8 @@ public class Main extends JFrame {
         for (int i = 0; i < NUM_TABS; i++) {
             final String title = "Test " + i;
             final JPanel panel = createPanel(title);
-//            if (USE_EXTENDED_TABBED_PANE) {
-//                ((JTabbedPaneExtended) testTabbedPane).add(title, panel, deleteAction);
-//            } else {
             testTabbedPane.add(title, panel);
             testTabbedPane.setTabComponentAt(i, new ClosableTabComponent(testTabbedPane, deleteAction));
-//            }
         }
         tabComponentsItem.setSelected(true);
         testTabbedPane.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
